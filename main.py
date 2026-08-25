@@ -1,7 +1,7 @@
 import os
-# import psycopg2
-# from psycopg2 import pool
-from fastapi import FastAPI, Form, HTTPException, Depends, Status
+import psycopg2
+from psycopg2 import pool
+from fastapi import FastAPI, Form, HTTPException, Depends, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 app = FastAPI(title="Instapulse AI - Instagram Edition")
@@ -314,7 +314,7 @@ def add_free_user(user_id: int = Form(...), username: str = Form(...), db=Depend
                 ON CONFLICT (user_id) DO UPDATE SET is_free = TRUE, username = EXCLUDED.username;
             """, (user_id, username))
             db.commit()
-        return RedirectResponse(url="/admin", status_code=Status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=f"خطأ أثناء إضافة الحساب المجاني: {str(e)}")
