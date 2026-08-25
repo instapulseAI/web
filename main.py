@@ -13,12 +13,15 @@ DATABASE_URL = os.getenv(
 )
 
 # نظام الاتصال السريع المباشر (Connection Pool)
+db_pool = None
 try:
     db_pool = psycopg2.pool.ThreadedConnectionPool(2, 50, DATABASE_URL)
 except Exception as e:
     print(f"خطأ في الاتصال بقاعدة البيانات: {e}")
 
 def get_db():
+    if not db_pool:
+        raise HTTPException(status_code=500, detail="قاعدة البيانات غير متصلة.")
     conn = db_pool.getconn()
     try:
         yield conn
@@ -28,6 +31,9 @@ def get_db():
 @app.on_event("startup")
 def startup_db():
     """تهيئة الجداول مع دعم الحسابات المجانية المخصصة"""
+    if not db_pool:
+        print("تحذير: تخطي تهيئة قاعدة البيانات لعدم توفر الاتصال.")
+        return
     conn = db_pool.getconn()
     try:
         with conn.cursor() as cur:
