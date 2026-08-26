@@ -1,281 +1,211 @@
 import os
-from fastapi import FastAPI, Form, HTTPException, status
-from fastapi.responses import HTMLResponse, JSONResponse
-from pydantic import BaseModel
-from typing import List, Optional
+from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
-app = FastAPI(title="Instapulse AI - Instagram Edition")
+# تهيئة التطبيق
+app = FastAPI(
+    title="Instapulse AI",
+    description="Professional Instagram Management Platform",
+    version="1.0.0"
+)
 
-# قاعدة بيانات مؤقتة في الذاكرة لتخزين الحسابات والاشتراكات
-db_accounts = [
-    {"username": "brand_official", "status": "نشط", "subscribed": True},
-    {"username": "personal_test", "status": "مستثنى", "subscribed": False}
-]
+# -----------------------------------------------------------------------------
+# 1. تصميم الواجهة (HTML/CSS) - أسلوب مشابه لإنستغرام (نظيف، أبيض وأسود، وضع ليلي)
+# استخدمنا مكتبة TailwindCSS عبر الـ CDN لبناء تصميم احترافي وسريع
+# -----------------------------------------------------------------------------
 
-# الواجهة الرئيسية المكتملة للتطبيق
-HTML_LAYOUT = """
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Instapulse AI | منصة إدارة واشتراكات إنستغرام</title>
-    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --ig-primary: #833ab4;
-            --ig-gradient: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
-            --bg-dark: #0f1419;
-            --card-bg: #1a202c;
-            --text-color: #f7fafc;
-            --border-color: #2d3748;
-        }
-        body {
-            font-family: 'Tajawal', sans-serif;
-            background-color: var(--bg-dark);
-            color: var(--text-color);
-            margin: 0;
-            padding: 20px;
-        }
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-        }
-        .header {
-            text-align: center;
-            padding: 20px 0;
-            border-bottom: 1px solid var(--border-color);
-            margin-bottom: 30px;
-        }
-        .header h1 {
-            background: var(--ig-gradient);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            font-size: 2.5rem;
-            margin: 0;
-        }
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
-            gap: 20px;
-        }
-        .card {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 25px;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
-        }
-        .card h2 {
-            margin-top: 0;
-            font-size: 1.3rem;
-            color: #e2e8f0;
-            border-bottom: 2px solid #319795;
-            padding-bottom: 8px;
-            display: inline-block;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-size: 0.9rem;
-            color: #a0aec0;
-        }
-        input, select {
-            width: 100%;
-            padding: 10px;
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-            background-color: #2d3748;
-            color: white;
-            box-sizing: border-box;
-            font-family: inherit;
-        }
-        .btn {
-            width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            background: var(--ig-gradient);
-            color: white;
-            font-weight: bold;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: opacity 0.2s;
-        }
-        .btn:hover {
-            opacity: 0.9;
-        }
-        .account-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px;
-            background: #2d3748;
-            border-radius: 8px;
-            margin-bottom: 10px;
-        }
-        .status-badge {
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 0.8rem;
-            font-weight: bold;
-        }
-        .status-active { background: #276749; color: #9ae6b4; }
-        .status-excluded { background: #742a2a; color: #feb2b2; }
-        .btn-toggle {
-            padding: 5px 10px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 0.8rem;
-            background: #4a5568;
-            color: white;
-        }
-        .price-tag {
-            font-size: 1.8rem;
-            font-weight: bold;
-            color: #38b2ac;
-            text-align: center;
-            margin: 15px 0;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>Instapulse AI</h1>
-            <p>منصة أتمتة حسابات إنستغرام والدفع الإلكتروني المباشر</p>
-        </div>
-
-        <div class="grid">
-            <!-- قسم الاشتراك والدفع -->
-            <div class="card">
-                <h2>🚀 الترقية والاشتراك الممتاز</h2>
-                <div class="price-tag">$29 / شهرياً</div>
-                <form id="paymentForm">
-                    <div class="form-group">
-                        <label>الاسم الكامل علي البطاقة</label>
-                        <input type="text" id="cardHolder" placeholder="John Doe" required>
-                    </div>
-                    <div class="form-group">
-                        <label>رقم البطاقة البنكية (Visa / MasterCard)</label>
-                        <input type="text" id="cardNumber" placeholder="4532 •••• •••• 8890" maxlength="19" required>
-                    </div>
-                    <div style="display: flex; gap: 10px;">
-                        <div class="form-group" style="flex: 1;">
-                            <label>تاريخ الانتهاء</label>
-                            <input type="text" id="cardExp" placeholder="MM/YY" maxlength="5" required>
-                        </div>
-                        <div class="form-group" style="flex: 1;">
-                            <label>رمز الأمان (CVC)</label>
-                            <input type="password" id="cardCvc" placeholder="123" maxlength="3" required>
-                        </div>
-                    </div>
-                    <button type="submit" class="btn">تأكيد الاشتراك والدفع الآن</button>
-                </form>
-            </div>
-
-            <!-- قسم إدارة وتخصيص الحسابات -->
-            <div class="card">
-                <h2>📸 إدارة حسابات إنستغرام</h2>
-                
-                <form id="addAccountForm" style="margin-bottom: 20px;">
-                    <div class="form-group">
-                        <label>إضافة حساب إنستغرام جديد</label>
-                        <input type="text" id="newUsername" placeholder="اسم المستخدم بدون @" required>
-                    </div>
-                    <button type="submit" class="btn" style="background: #319795;">إضافة الحساب</button>
-                </form>
-
-                <label>الحسابات المسجلة وحالتها:</label>
-                <div id="accountsList">
-                    <!-- سيتم تحميل الحسابات ديناميكياً -->
+def get_base_html(title: str, content: str) -> str:
+    return f"""
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl" class="light">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>{title} | Instapulse AI</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script>
+            tailwind.config = {{
+                darkMode: 'media', // يتفاعل مع الوضع الليلي لجهاز المستخدم تلقائياً
+                theme: {{
+                    extend: {{
+                        colors: {{
+                            instaBlue: '#0095f6',
+                            instaDark: '#121212',
+                            instaBorder: '#dbdbdb',
+                            instaDarkBorder: '#262626'
+                        }}
+                    }}
+                }}
+            }}
+        </script>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
+            body {{ font-family: 'Tajawal', sans-serif; transition: background-color 0.3s, color 0.3s; }}
+        </style>
+    </head>
+    <body class="bg-gray-50 text-gray-900 dark:bg-instaDark dark:text-white min-h-screen flex flex-col">
+        
+        <!-- الشريط العلوي (Navbar) -->
+        <nav class="bg-white dark:bg-black border-b border-instaBorder dark:border-instaDarkBorder sticky top-0 z-50">
+            <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
+                <a href="/" class="text-xl font-bold tracking-wider">Instapulse<span class="text-instaBlue">AI</span></a>
+                <div class="flex gap-4 items-center">
+                    <a href="/pricing" class="text-sm font-medium hover:text-gray-500 transition">الأسعار</a>
+                    <a href="/login" class="bg-instaBlue hover:bg-blue-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition shadow-sm">
+                        تسجيل الدخول
+                    </a>
                 </div>
             </div>
-        </div>
-    </div>
+        </nav>
 
-    <script>
-        // تحميل قائمة الحسابات
-        async function loadAccounts() {
-            const res = await fetch('/api/accounts');
-            const data = await res.json();
-            const list = document.getElementById('accountsList');
-            list.innerHTML = '';
-            
-            data.forEach(acc => {
-                const badgeClass = acc.subscribed ? 'status-active' : 'status-excluded';
-                const statusText = acc.subscribed ? 'مشترك' : 'مستثنى';
-                const actionText = acc.subscribed ? 'استثناء' : 'تفعيل';
-                
-                list.innerHTML += `
-                    <div class="account-item">
-                        <div>
-                            <strong>@${acc.username}</strong>
-                            <span class="status-badge ${badgeClass}" style="margin-right: 8px;">${statusText}</span>
-                        </div>
-                        <button class="btn-toggle" onclick="toggleAccount('${acc.username}')">${actionText}</button>
-                    </div>
-                `;
-            });
-        }
+        <!-- محتوى الصفحة -->
+        <main class="flex-grow flex items-center justify-center p-4">
+            <div class="w-full max-w-5xl">
+                {content}
+            </div>
+        </main>
 
-        // إضافة حساب جديد
-        document.getElementById('addAccountForm').onsubmit = async (e) => {
-            e.preventDefault();
-            const username = document.getElementById('newUsername').value;
-            await fetch('/api/accounts/add', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                body: `username=${encodeURIComponent(username)}`
-            });
-            document.getElementById('newUsername').value = '';
-            loadAccounts();
-        };
+        <!-- الفوتر -->
+        <footer class="text-center py-6 text-xs text-gray-400 dark:text-gray-500 border-t border-instaBorder dark:border-instaDarkBorder">
+            &copy; 2026 Instapulse AI. جميع الحقوق محفوظة.
+        </footer>
+    </body>
+    </html>
+    """
 
-        // تبديل حالة الحساب (إضافة/استثناء من الاشتراك)
-        async function toggleAccount(username) {
-            await fetch('/api/accounts/toggle', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                body: `username=${encodeURIComponent(username)}`
-            });
-            loadAccounts();
-        }
-
-        // معالجة معاوضة الدفع والاشتراك
-        document.getElementById('paymentForm').onsubmit = async (e) => {
-            e.preventDefault();
-            alert('تم استلام بيانات الاشتراك والبطاقة بنجاح! سيتم تفعيل الحسابات الفعالة فوراً.');
-        };
-
-        loadAccounts();
-    </script>
-</body>
-</html>
-"""
+# -----------------------------------------------------------------------------
+# 2. مسارات الصفحات (Routes)
+# -----------------------------------------------------------------------------
 
 @app.get("/", response_class=HTMLResponse)
-async def serve_ui():
-    return HTML_LAYOUT
+async def landing_page():
+    content = """
+    <div class="text-center py-12 md:py-24">
+        <h1 class="text-4xl md:text-6xl font-bold mb-6">أدر حساب إنستغرام الخاص بك <br> بذكاء واحترافية</h1>
+        <p class="text-lg md:text-xl text-gray-500 dark:text-gray-400 mb-10 max-w-2xl mx-auto">
+            منصة متكاملة لتحليل تفاعل الزبائن، إدارة المحتوى، وزيادة مبيعاتك. لا حاجة لبطاقة ائتمان للبدء.
+        </p>
+        <div class="flex flex-col md:flex-row gap-4 justify-center">
+            <a href="/login" class="bg-instaBlue text-white px-8 py-3 rounded-xl font-bold text-lg hover:bg-blue-600 transition shadow-lg flex items-center justify-center gap-2">
+                <svg class="w-5 h-5 bg-white rounded-full p-0.5" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+                ابدأ الآن مجاناً عبر جوجل
+            </a>
+            <a href="/pricing" class="bg-white dark:bg-black text-black dark:text-white border border-gray-300 dark:border-gray-700 px-8 py-3 rounded-xl font-bold text-lg hover:bg-gray-50 dark:hover:bg-gray-900 transition">
+                اطلع على الأسعار
+            </a>
+        </div>
+    </div>
+    """
+    return get_base_html("الرئيسية", content)
 
-@app.get("/api/accounts")
-async def get_accounts():
-    return db_accounts
 
-@app.post("/api/accounts/add")
-async def add_account(username: str = Form(...)):
-    db_accounts.append({"username": username, "status": "نشط", "subscribed": True})
-    return {"message": "Success"}
+@app.get("/pricing", response_class=HTMLResponse)
+async def pricing_page():
+    content = """
+    <div class="text-center mb-12">
+        <h2 class="text-3xl font-bold mb-4">خطط تناسب طموحك</h2>
+        <p class="text-gray-500 dark:text-gray-400">اختر الباقة التي تناسب عملك. يمكنك الإلغاء في أي وقت.</p>
+    </div>
+    <div class="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+        
+        <!-- الباقة المجانية -->
+        <div class="border border-instaBorder dark:border-instaDarkBorder rounded-2xl p-8 bg-white dark:bg-black flex flex-col">
+            <h3 class="text-xl font-bold text-gray-500 mb-2">التجربة المجانية</h3>
+            <div class="text-4xl font-bold mb-4">مجاناً <span class="text-sm font-normal text-gray-400">/ 7 أيام</span></div>
+            <ul class="text-right space-y-3 mb-8 flex-grow text-sm">
+                <li>✅ لا حاجة لبطاقة ائتمان</li>
+                <li>✅ ربط حساب إنستغرام واحد</li>
+                <li>✅ تحليلات أساسية</li>
+            </ul>
+            <a href="/login" class="w-full block text-center border border-instaBlue text-instaBlue font-bold py-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition">ابدأ التجربة</a>
+        </div>
 
-@app.post("/api/accounts/toggle")
-async def toggle_account(username: str = Form(...)):
-    for acc in db_accounts:
-        if acc["username"] == username:
-            acc["subscribed"] = not acc["subscribed"]
-            acc["status"] = "نشط" if acc["subscribed"] else "مستثنى"
-            break
-    return {"message": "Toggled"}
+        <!-- الباقة الشهرية -->
+        <div class="border-2 border-instaBlue rounded-2xl p-8 bg-white dark:bg-black relative shadow-xl flex flex-col transform md:-translate-y-4">
+            <div class="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-instaBlue text-white px-3 py-1 rounded-full text-xs font-bold">الأكثر طلباً</div>
+            <h3 class="text-xl font-bold text-instaBlue mb-2">الاشتراك الشهري</h3>
+            <div class="text-4xl font-bold mb-4">$6 <span class="text-sm font-normal text-gray-400">/ شهرياً</span></div>
+            <ul class="text-right space-y-3 mb-8 flex-grow text-sm">
+                <li>✅ كافة ميزات التجربة المجانية</li>
+                <li>✅ ربط حسابات متعددة</li>
+                <li>✅ تحليلات متقدمة والرد الذكي</li>
+                <li>✅ دعم فني ذو أولوية</li>
+            </ul>
+            <a href="/login" class="w-full block text-center bg-instaBlue text-white font-bold py-2 rounded-lg hover:bg-blue-600 transition shadow-md">اشترك الآن</a>
+        </div>
+
+        <!-- الباقة السنوية -->
+        <div class="border border-instaBorder dark:border-instaDarkBorder rounded-2xl p-8 bg-white dark:bg-black flex flex-col">
+            <h3 class="text-xl font-bold text-gray-500 mb-2">الاشتراك السنوي</h3>
+            <div class="text-4xl font-bold mb-2">$70 <span class="text-sm font-normal text-gray-400">/ سنوياً</span></div>
+            <div class="text-xs text-green-500 font-bold mb-4">وفر أكثر من 15% </div>
+            <ul class="text-right space-y-3 mb-8 flex-grow text-sm">
+                <li>✅ جميع ميزات الباقة الشهرية</li>
+                <li>✅ تقارير أداء مخصصة للشركات</li>
+                <li>✅ مدير حساب مخصص</li>
+            </ul>
+            <a href="/login" class="w-full block text-center border border-gray-300 dark:border-gray-700 text-black dark:text-white font-bold py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900 transition">اشترك الآن</a>
+        </div>
+    </div>
+    """
+    return get_base_html("الأسعار", content)
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page():
+    content = """
+    <div class="max-w-md mx-auto border border-instaBorder dark:border-instaDarkBorder rounded-xl p-8 bg-white dark:bg-black shadow-sm text-center">
+        <h2 class="text-2xl font-bold mb-2">تسجيل الدخول</h2>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-8">استخدم حساب جوجل الخاص بك للوصول إلى لوحة التحكم</p>
+        
+        <!-- زر تسجيل الدخول الوهمي (سيتم ربطه بـ Authlib لاحقاً) -->
+        <a href="/auth/google/login" class="w-full flex items-center justify-center gap-3 border border-gray-300 dark:border-gray-700 py-2.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900 transition font-medium">
+            <svg class="w-5 h-5" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+            المتابعة باستخدام Google
+        </a>
+        
+        <div class="mt-6 text-xs text-gray-400">
+            بتسجيلك الدخول، أنت توافق على <a href="#" class="text-instaBlue hover:underline">شروط الخدمة</a> و <a href="#" class="text-instaBlue hover:underline">سياسة الخصوصية</a>.
+        </div>
+    </div>
+    """
+    return get_base_html("تسجيل الدخول", content)
+
+# -----------------------------------------------------------------------------
+# 3. مسارات خلفية (Backend Logic Preparations)
+# هنا سنقوم لاحقاً بإضافة أكواد قاعدة البيانات الحقيقية والـ OAuth
+# -----------------------------------------------------------------------------
+
+@app.get("/auth/google/login")
+async def dummy_google_login():
+    # هذا المسار حالياً وهمي، سنقوم في الخطوة القادمة ببرمجة نظام OAuth الحقيقي
+    # وسيحتاج لتنزيل مكتبات (authlib, httpx) وإعداد Google Cloud Console.
+    return RedirectResponse(url="/dashboard")
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard_page():
+    # هذه لوحة التحكم التي تظهر بعد تسجيل الدخول
+    content = """
+    <div class="bg-white dark:bg-black border border-instaBorder dark:border-instaDarkBorder rounded-xl p-8">
+        <div class="flex justify-between items-center mb-8 border-b border-gray-100 dark:border-gray-800 pb-4">
+            <h2 class="text-2xl font-bold">لوحة التحكم</h2>
+            <span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                حالة الاشتراك: تجربة مجانية فعالة
+            </span>
+        </div>
+        
+        <div class="text-center py-10">
+            <div class="w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-full mx-auto flex items-center justify-center mb-4">
+                <svg class="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+            </div>
+            <h3 class="text-lg font-bold mb-2">لم تقم بربط حساب إنستغرام بعد</h3>
+            <p class="text-gray-500 text-sm mb-6 max-w-md mx-auto">للبدء في تحليل البيانات وإدارة التفاعلات، يرجى ربط حساب إنستغرام الخاص بك.</p>
+            <button class="bg-instaBlue text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-600 transition">
+                + ربط حساب إنستغرام
+            </button>
+        </div>
+    </div>
+    """
+    return get_base_html("لوحة التحكم", content)
