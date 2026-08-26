@@ -1,67 +1,90 @@
-# routers_ui.py
-from fastapi import APIRouter
-from fastapi.responses import HTMLResponse
-from templates import get_base_html
+from fastapi import APIRouter, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from templates import layout
 
-# إنشاء راوتر خاص بصفحات الواجهة
 router = APIRouter()
 
 @router.get("/", response_class=HTMLResponse)
-async def landing_page():
+async def home_page(request: Request):
+    """الصفحة الرئيسية للموقع"""
+    user = request.session.get("user")
+    
     content = """
-    <div class="text-center py-12 md:py-24">
-        <h1 class="text-4xl md:text-6xl font-bold mb-6">أدر حساب إنستغرام الخاص بك <br> بذكاء واحترافية</h1>
-        <p class="text-lg md:text-xl text-gray-500 dark:text-gray-400 mb-10 max-w-2xl mx-auto">
-            منصة متكاملة لتحليل تفاعل الزبائن، إدارة المحتوى، وزيادة مبيعاتك. لا حاجة لبطاقة ائتمان للبدء.
-        </p>
-        <div class="flex flex-col md:flex-row gap-4 justify-center">
-            <a href="/login" class="bg-instaBlue text-white px-8 py-3 rounded-xl font-bold text-lg hover:bg-blue-600 transition shadow-lg">
-                ابدأ الآن مجاناً عبر جوجل
-            </a>
-            <a href="/pricing" class="bg-white dark:bg-black text-black dark:text-white border border-gray-300 dark:border-gray-700 px-8 py-3 rounded-xl font-bold text-lg hover:bg-gray-50 transition">
-                اطلع على الأسعار
+    <section class="py-20 text-center space-y-6">
+        <h1 class="text-5xl font-extrabold tracking-tight">إدارة إنستغرام أسهل مع <span class="text-blue-500">Instapulse AI</span></h1>
+        <p class="text-xl text-slate-400 max-w-2xl mx-auto">منصتك الذكية لأتمتة المنشورات، تحسين التفاعل، وتوليد أفكار المحتوى بالذكاء الاصطناعي.</p>
+        <div class="pt-4">
+            <a href="/auth/login/google" class="bg-blue-600 hover:bg-blue-700 text-white text-lg font-semibold px-8 py-3 rounded-xl transition shadow-lg shadow-blue-500/20">
+                ابدأ مجاناً مع Google
             </a>
         </div>
-    </div>
+    </section>
     """
-    return get_base_html("الرئيسية", content)
+    return layout("الرئيسية - Instapulse AI", content, user=user)
 
 @router.get("/pricing", response_class=HTMLResponse)
-async def pricing_page():
+async def pricing_page(request: Request):
+    """صفحة الأسعار"""
+    user = request.session.get("user")
+    
     content = """
-    <div class="text-center mb-12">
-        <h2 class="text-3xl font-bold mb-4">خطط تناسب طموحك</h2>
-    </div>
-    <div class="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-        <!-- خطة مجانية -->
-        <div class="border border-instaBorder rounded-2xl p-8 bg-white dark:bg-black flex flex-col">
-            <h3 class="text-xl font-bold text-gray-500 mb-2">التجربة المجانية</h3>
-            <div class="text-4xl font-bold mb-4">مجاناً <span class="text-sm text-gray-400">/ 7 أيام</span></div>
-            <a href="/login" class="mt-auto w-full block text-center border border-instaBlue text-instaBlue font-bold py-2 rounded-lg">ابدأ التجربة</a>
+    <section class="py-12 space-y-8">
+        <h2 class="text-3xl font-bold text-center">خطط الأسعار</h2>
+        <div class="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            <div class="p-6 bg-slate-800 rounded-2xl border border-slate-700 space-y-4">
+                <h3 class="text-2xl font-bold">الخطة المجانية</h3>
+                <p class="text-3xl font-extrabold">$0 <span class="text-sm font-normal text-slate-400">/ شهرياً</span></p>
+                <ul class="space-y-2 text-slate-300">
+                    <li>✓ إدارة حساب واحد</li>
+                    <li>✓ توليد 10 أفكار محتوى</li>
+                </ul>
+            </div>
+            <div class="p-6 bg-blue-900/40 rounded-2xl border border-blue-500 space-y-4">
+                <h3 class="text-2xl font-bold">الخطة الاحترافية</h3>
+                <p class="text-3xl font-extrabold">$19 <span class="text-sm font-normal text-slate-400">/ شهرياً</span></p>
+                <ul class="space-y-2 text-slate-300">
+                    <li>✓ إدارة حسابات غير محدودة</li>
+                    <li>✓ أتمتة كاملة مع الذكاء الاصطناعي</li>
+                </ul>
+            </div>
         </div>
-        <!-- خطة شهرية -->
-        <div class="border-2 border-instaBlue rounded-2xl p-8 bg-white dark:bg-black relative shadow-xl flex flex-col transform md:-translate-y-4">
-            <h3 class="text-xl font-bold text-instaBlue mb-2">الاشتراك الشهري</h3>
-            <div class="text-4xl font-bold mb-4">$6 <span class="text-sm text-gray-400">/ شهرياً</span></div>
-            <a href="/login" class="mt-auto w-full block text-center bg-instaBlue text-white font-bold py-2 rounded-lg">اشترك الآن</a>
-        </div>
-        <!-- خطة سنوية -->
-        <div class="border border-instaBorder rounded-2xl p-8 bg-white dark:bg-black flex flex-col">
-            <h3 class="text-xl font-bold text-gray-500 mb-2">الاشتراك السنوي</h3>
-            <div class="text-4xl font-bold mb-4">$70 <span class="text-sm text-gray-400">/ سنوياً</span></div>
-            <a href="/login" class="mt-auto w-full block text-center border border-gray-300 text-black dark:text-white font-bold py-2 rounded-lg">اشترك الآن</a>
-        </div>
-    </div>
+    </section>
     """
-    return get_base_html("الأسعار", content)
+    return layout("الأسعار - Instapulse AI", content, user=user)
 
 @router.get("/dashboard", response_class=HTMLResponse)
-async def dashboard_page():
-    content = """
-    <div class="bg-white dark:bg-black border border-instaBorder rounded-xl p-8 text-center">
-        <h2 class="text-2xl font-bold mb-4">لوحة التحكم</h2>
-        <p class="mb-4">لم تقم بربط حساب إنستغرام بعد.</p>
-        <button class="bg-instaBlue text-white px-6 py-2 rounded-lg font-medium">+ ربط حساب إنستغرام</button>
-    </div>
+async def dashboard_page(request: Request):
+    """لوحة التحكم - محمية بالكامل"""
+    user = request.session.get("user")
+    
+    # حماية الصفحة: إذا لم يسجل الدخول، يتم تحويله لصفحة Google
+    if not user:
+        return RedirectResponse(url="/auth/login/google", status_code=303)
+
+    content = f"""
+    <section class="py-8 space-y-6">
+        <div class="flex items-center space-x-4 space-x-reverse bg-slate-800 p-6 rounded-2xl border border-slate-700">
+            <img src="{user.get('picture', '')}" alt="Profile" class="w-16 h-16 rounded-full border-2 border-blue-500">
+            <div>
+                <h1 class="text-2xl font-bold">مرحباً بك، {user.get('name')} 👋</h1>
+                <p class="text-slate-400">{user.get('email')}</p>
+            </div>
+        </div>
+        
+        <div class="grid md:grid-cols-3 gap-6">
+            <div class="p-6 bg-slate-800 rounded-xl border border-slate-700">
+                <h3 class="text-lg font-semibold text-slate-300">الحسابات المربوطة</h3>
+                <p class="text-3xl font-bold mt-2">0</p>
+            </div>
+            <div class="p-6 bg-slate-800 rounded-xl border border-slate-700">
+                <h3 class="text-lg font-semibold text-slate-300">المنشورات المجدولة</h3>
+                <p class="text-3xl font-bold mt-2">0</p>
+            </div>
+            <div class="p-6 bg-slate-800 rounded-xl border border-slate-700">
+                <h3 class="text-lg font-semibold text-slate-300">نقاط AI المتبقية</h3>
+                <p class="text-3xl font-bold mt-2 text-blue-400">100</p>
+            </div>
+        </div>
+    </section>
     """
-    return get_base_html("لوحة التحكم", content)
+    return layout("لوحة التحكم - Instapulse AI", content, user=user)
