@@ -6,24 +6,22 @@ from templates import layout
 
 router = APIRouter(prefix="/ai", tags=["AI Generation"])
 
-# تهيئة عميل Gemini باستخدام المفتاح المضاف في Railway
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
 @router.post("/generate-caption", response_class=HTMLResponse)
 async def generate_caption(request: Request, topic: str = Form(...), tone: str = Form("حماسي")):
-    """توليد كابشن وافكار منشورات باستخدام الذكاء الاصطناعي"""
+    """توليد كابشن وأفكار منشورات باستخدام الذكاء الاصطناعي"""
     user = request.session.get("user")
     
     # حماية المسار: التأكد من تسجيل الدخول
     if not user:
         return RedirectResponse(url="/auth/login/google", status_code=303)
         
-    if not GEMINI_API_KEY:
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY is missing in Railway environment variables.")
 
     try:
         # استدعاء نموذج Gemini الرسمي
-        client = genai.Client(api_key=GEMINI_API_KEY)
+        client = genai.Client(api_key=api_key)
         
         prompt = f"""
         أنت خبير في تسويق إنستغرام وإنشاء المحتوى الجذاب.
@@ -36,10 +34,16 @@ async def generate_caption(request: Request, topic: str = Form(...), tone: str =
         3. 🏷️ قائمة بأفضل 10 هاشتاغات ذات تفاعل عالٍ ومناسبة للموضوع.
         """
         
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-        )
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+            )
+        except Exception:
+            response = client.models.generate_content(
+                model="gemini-1.5-flash",
+                contents=prompt,
+            )
         
         ai_result = response.text.replace("\n", "<br>")
         
