@@ -4,16 +4,16 @@ from templates import layout
 
 router = APIRouter(prefix="/admin", tags=["Admin Panel"])
 
-# بيانات الأدمين الثابتة (تطابق بياناتك)
+# بيانات دخول الأدمين الخاص بك
 ADMIN_EMAIL = "admin_alimaher@admin.com"
 ADMIN_PASSWORD = "admminalialiadmin1010admin momo"
 
-# قائمة مؤقتة لتخزين المستخدمين المجانيين مدى الحياة
+# قائمة الحسابات المعفاة من الاشتراك (مجاناً مدى الحياة)
 free_lifetime_users = ["vip_user@example.com"]
 
 @router.get("/login", response_class=HTMLResponse)
 async def admin_login_page(request: Request):
-    """صفحة دخول الأدمين الخاصّة"""
+    """صفحة تسجيل دخول الأدمين"""
     user = request.session.get("user")
     
     content = """
@@ -40,7 +40,7 @@ async def admin_login_page(request: Request):
 
 @router.post("/login")
 async def admin_login_submit(request: Request, email: str = Form(...), password: str = Form(...)):
-    """التحقق من بيانات الأدمين"""
+    """التحقق من كلمة المرور والبريد"""
     if email == ADMIN_EMAIL and password == ADMIN_PASSWORD:
         request.session["user"] = {
             "name": "علي ماهر (Admin)",
@@ -50,14 +50,14 @@ async def admin_login_submit(request: Request, email: str = Form(...), password:
         }
         return RedirectResponse(url="/admin/dashboard", status_code=303)
     else:
-        raise HTTPException(status_code=401, detail="بيانات دخول الأدمين غير صحيحة.")
+        raise HTTPException(status_code=401, detail="بيانات الدخول غير صحيحة.")
 
 @router.get("/dashboard", response_class=HTMLResponse)
 async def admin_dashboard(request: Request):
-    """لوحة تحكم الأدمين"""
+    """لوحة تحكم الأدمين الخاصة"""
     user = request.session.get("user")
     
-    # التحقق من أن المسجّل هو الأدمين
+    # حماية الصفحة: التأكد من أن المسجل هو الأدمين
     if not user or not user.get("is_admin"):
         return RedirectResponse(url="/admin/login", status_code=303)
 
@@ -109,7 +109,7 @@ async def admin_dashboard(request: Request):
 
 @router.post("/add-free-user")
 async def add_free_user(request: Request, target_email: str = Form(...)):
-    """إضافة مستخدم مجاني مدى الحياة"""
+    """إضافة حساب مجاني جديد"""
     user = request.session.get("user")
     if not user or not user.get("is_admin"):
         raise HTTPException(status_code=403, detail="غير مصرح لك.")
